@@ -1,0 +1,30 @@
+name: "PB-04 - Compromission de compte confirmee (correlation)"
+description: >
+  Declenche par la regle de correlation 100650 (plusieurs indicateurs
+  faibles combines = indicateur fort). Reponse automatique complete :
+  desactivation du compte AD (deja engagee par Wazuh active-response)
+  + case management + escalade immediate.
+trigger_rule_ids:
+  - 100650
+
+steps:
+  - action: create_case
+    title_template: "[CRITIQUE] Compromission de compte confirmee"
+    severity: 4
+    tags: ["account-compromise", "TA0040", "auto-response"]
+
+  - action: respond
+    description: >
+      Compte Active Directory desactive automatiquement (Wazuh
+      active-response / disable-account). Sessions actives a revoquer
+      manuellement par l'equipe IAM. MFA a reinitialiser avant
+      reactivation du compte.
+
+  - action: notify
+    subject: "[SOC] CRITIQUE - Compte compromis, desactivation automatique effectuee"
+    message: >
+      Une correlation de plusieurs indicateurs a confirme la
+      compromission d'un compte utilisateur. Le compte a ete
+      desactive automatiquement. Escalade immediate a l'astreinte
+      SOC N2/N3 et au RSSI. Investigation forensic requise.
+    severity_label: critical

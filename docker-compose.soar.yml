@@ -1,0 +1,136 @@
+# =====================================================================
+# Stack SOAR - Projet CDG Capital
+# TheHive (gestion des cas / IR) + Cortex (enrichissement / analyseurs)
+# + orchestrateur SOAR maison (playbooks Python)
+#
+# Demarrage : docker compose -f docker-compose.soar.yml up -d
+# Prerequis : docker-compose.siem.yml deja demarre (reseau wazuh_bridge)
+# =====================================================================
+version: "3.7"
+
+services:
+  cassandra:
+    image: cassandra:4.1
+    hostname: cassandra
+    restart: unless-stopped
+    environment:
+      - MAX_HEAP_SIZE=1G
+      - HEAP_NEWSIZE=256M
+      - CASSANDRA_CLUSTER_NAME=thp
+    volumes:
+      - cassandra_data:/var/lib/cassandra
+    networks:
+      - soc-network
+
+  elasticsearch-thehive:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.13
+    hostname: elasticsearch-thehive
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+    volumes:
+      - es_thehive_data:/usr/share/elasticsearch/data
+    networks:
+      - soc-network
+
+  thehive:
+    image: strangebee/thehive:5.2
+    hostname: thehive
+    restart: unless-stopped
+    depends_on:
+      - cassandra
+      - elasticsearch-thehive
+    ports:
+      - "9000:9000"
+    command:
+      - --secret
+      - "changeMeSecretKeyThehive2026"
+      - --cql-hostnames
+      - cassandra
+      - --index-backend
+      - elasticsearch
+      - --es-hostnames
+      - elasticsearch-thehive
+      - --cortex-hostnames
+      - cortex
+      - --cortex-keys
+      - "changeMeCortexApiKey"
+    volumes:
+      - thehive_data:/opt/thp/thehive/data
+      - thehive_index:/opt/thp/thehive/index
+    networks:
+      - soc-network
+
+  cortex:
+    image: thehiveproject/cortex:3.1.7
+    hostname: cortex
+    restart: unless-stopped
+    depends_on:
+      - elasticsearch-cortex
+    ports:
+      - "9001:9001"
+    environment:
+      - job_directory=/tmp/cortex-jobs
+      - es_uri=http://elasticsearch-cortex:9200
+    volumes:
+      - cortex_data:/tmp/cortex-jobs
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - soc-network
+
+  elasticsearch-cortex:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.13
+    hostname: elasticsearch-cortex
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+    volumes:
+      - es_cortex_data:/usr/share/elasticsearch/data
+    networks:
+      - soc-network
+
+  # ------------------------------------------------------------------
+  # Orchestrateur SOAR maison : recoit les alertes Wazuh (webhook),
+  # execute les playbooks (enrichissement, decision, reponse auto,
+  # creation de cas TheHive, notification).
+  # ------------------------------------------------------------------
+  soar-orchestrator:
+    build: ./soar-orchestrator
+    hostname: soar-orchestrator
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - THEHIVE_URL=http://thehive:9000
+      - THEHIVE_API_KEY=F+UoRjbAfEH2DdFoQlxqENkiEbfI6BAb
+      - CORTEX_URL=http://cortex:9001
+      - CORTEX_API_KEY=TvXBuI2hvHxGHmW/SBw/Q9Ai0tOMCmcs
+      - SLACK_WEBHOOK_URL=
+      - SMTP_HOST=
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./soar-orchestrator/playbooks:/app/playbooks
+      - soar_logs:/app/logs
+    networks:
+      - soc-network
+      - wazuh_bridge
+
+networks:
+  soc-network:
+    driver: bridge
+  wazuh_bridge:
+    external: true
+    name: siem_default # cree automatiquement par docker-compose.siem.yml (name: siem)
+
+volumes:
+  cassandra_data:
+  es_thehive_data:
+  thehive_data:
+  thehive_index:
+  cortex_data:
+  es_cortex_data:
+  soar_logs:

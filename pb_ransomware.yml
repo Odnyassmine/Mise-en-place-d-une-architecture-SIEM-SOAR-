@@ -1,0 +1,31 @@
+name: "PB-02 - Indicateurs ransomware / suppression de sauvegardes"
+description: >
+  Reaction a un comportement type ransomware : modification massive
+  de fichiers (regle 100630) ou suppression des sauvegardes/cliches
+  Windows (regle 100631). Criticite maximale (impact PCA/PRA).
+trigger_rule_ids:
+  - 100630
+  - 100631
+
+steps:
+  - action: create_case
+    title_template: "[CRITIQUE][Ransomware] {rule_description}"
+    severity: 4
+    tags: ["ransomware", "T1486", "T1490", "pca-pra"]
+
+  - action: respond
+    description: >
+      Isolation reseau de l'hote recommandee en priorite 1 (action
+      manuelle validee par l'astreinte SOC - non automatisee par
+      defaut pour eviter un faux positif sur un serveur de production
+      critique). Compte utilisateur associe desactive automatiquement
+      si la regle correlee 100650 est egalement declenchee.
+
+  - action: notify
+    subject: "[SOC] ALERTE CRITIQUE - Comportement type ransomware detecte"
+    message: >
+      Un comportement caracteristique d'une attaque par rancongiciel
+      a ete detecte (modification massive de fichiers ou suppression
+      des sauvegardes). Escalade immediate vers l'astreinte SOC et le
+      RSSI requise. Isolation reseau manuelle recommandee sous 15 min.
+    severity_label: critical

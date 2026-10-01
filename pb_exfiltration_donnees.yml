@@ -1,0 +1,24 @@
+name: "PB-03 - Exfiltration potentielle de donnees clients/KYC"
+description: >
+  Reaction a une modification suspecte de fichiers sensibles
+  (regle 100620) ou un export volumineux de donnees (regle 100621).
+  Enjeu de conformite Loi 09-08 (protection des donnees personnelles)
+  et reporting reglementaire AMMC/BAM en cas de confirmation.
+trigger_rule_ids:
+  - 100620
+  - 100621
+
+steps:
+  - action: create_case
+    title_template: "[Exfiltration] {rule_description}"
+    severity: 3
+    tags: ["data-leak", "loi-09-08", "T1567", "confidentiel"]
+
+  - action: notify
+    subject: "[SOC] Suspicion d'exfiltration de donnees sensibles"
+    message: >
+      Une activite suspecte impliquant des fichiers clients/KYC ou un
+      export de donnees a ete detectee. A qualifier sous 1h par
+      l'analyste SOC N1. En cas de confirmation, notifier le DPO et
+      evaluer l'obligation de notification reglementaire (CNDP/AMMC).
+    severity_label: high

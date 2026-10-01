@@ -1,0 +1,143 @@
+<!--
+  Règles personnalisées - Projet SIEM/SOAR CDG Capital
+  Auteur : Stage PFE / Cycle Ingénieur - EMSI Marrakech
+  Groupe d'ID réservé aux règles custom : 100600-100699 (hors plage Wazuh officielle)
+
+  Mapping MITRE ATT&CK indiqué dans chaque règle pour la traçabilité
+  et l'alignement avec les exigences de reporting incident (AMMC/BAM).
+-->
+<group name="cdg_capital,finance_sector,">
+
+  <!-- ============================================================
+       1. ACCES A LA PLATEFORME DE TRADING / BACK-OFFICE
+       ============================================================ -->
+
+  <rule id="100600" level="10">
+    <if_group>web,accesslog</if_group>
+    <url>trading|back-office|ordres|opcvm</url>
+    <match>401|403</match>
+    <description>Tentative d'acces non autorise a la plateforme de trading/back-office</description>
+    <mitre>
+      <id>T1190</id>
+    </mitre>
+    <group>access_control,pci_dss_10.2.4,</group>
+  </rule>
+
+  <rule id="100601" level="12" frequency="5" timeframe="120">
+    <if_matched_sid>100600</if_matched_sid>
+    <description>Multiples tentatives d'acces non autorise a la plateforme de trading (possible bruteforce cible metier)</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>attack,bruteforce,</group>
+  </rule>
+
+  <!-- ============================================================
+       2. AUTHENTIFICATION - COMPTES A PRIVILEGES / ADMIN
+       ============================================================ -->
+
+  <rule id="100610" level="10">
+    <if_group>authentication_success</if_group>
+    <user>^admin|^administrator|^root|svc_</user>
+    <time>21:00-06:00</time>
+    <description>Connexion d'un compte privilegie/service en dehors des heures ouvrees</description>
+    <mitre>
+      <id>T1078.003</id>
+    </mitre>
+    <group>privileged_access,anomaly,</group>
+  </rule>
+
+  <rule id="100611" level="13" frequency="4" timeframe="180">
+    <if_matched_group>authentication_success</if_matched_group>
+    <same_source_ip />
+    <different_user />
+    <description>Un meme poste authentifie successivement avec plusieurs comptes distincts (possible pass-the-hash / compte compromis)</description>
+    <mitre>
+      <id>T1550.002</id>
+    </mitre>
+    <group>lateral_movement,credential_access,soar_correlation_source,</group>
+  </rule>
+
+  <!-- ============================================================
+       3. EXFILTRATION / FUITE DE DONNEES CLIENTS (confidentialite -
+       obligations Loi 09-08 protection donnees personnelles)
+       ============================================================ -->
+
+  <rule id="100620" level="12">
+    <if_group>syscheck</if_group>
+    <field name="file">clients|portefeuille|kyc|releve</field>
+    <action>modified|added</action>
+    <description>Modification suspecte de fichiers sensibles clients/portefeuilles/KYC hors processus applicatif</description>
+    <mitre>
+      <id>T1005</id>
+    </mitre>
+    <group>data_protection,loi_09-08,</group>
+  </rule>
+
+  <rule id="100621" level="12">
+    <if_group>web,accesslog</if_group>
+    <url>export|download|dump</url>
+    <regex>\.csv|\.xlsx|\.sql</regex>
+    <description>Export volumineux de donnees potentiellement sensibles depuis une application interne</description>
+    <mitre>
+      <id>T1567</id>
+    </mitre>
+    <group>exfiltration,data_protection,soar_correlation_source,</group>
+  </rule>
+
+  <!-- ============================================================
+       4. INDICATEURS RANSOMWARE / DESTRUCTION (continuite d'activite -
+       exigence PCA/PRA reglementaire secteur financier)
+       ============================================================ -->
+
+  <rule id="100630" level="14" frequency="8" timeframe="60">
+    <if_matched_group>syscheck</if_matched_group>
+    <action>added|modified</action>
+    <same_source_ip />
+    <description>Modification massive de fichiers en tres court laps de temps - comportement type ransomware</description>
+    <mitre>
+      <id>T1486</id>
+    </mitre>
+    <group>ransomware,critical,soar_correlation_source,</group>
+  </rule>
+
+  <rule id="100631" level="13">
+    <match>vssadmin delete shadows|wbadmin delete catalog|bcdedit /set recoveryenabled</match>
+    <description>Commande de suppression des sauvegardes / cliches Windows detectee (etape typique pre-chiffrement ransomware)</description>
+    <mitre>
+      <id>T1490</id>
+    </mitre>
+    <group>ransomware,critical,</group>
+  </rule>
+
+  <!-- ============================================================
+       5. INDICATEUR FORT DE COMPROMISSION -> declenche disable-account
+       (correlation de plusieurs signaux : regle "mere" utilisee par
+       l'active-response dans wazuh_manager.conf)
+       ============================================================ -->
+
+  <rule id="100650" level="15" frequency="3" timeframe="300">
+    <if_matched_group>soar_correlation_source</if_matched_group>
+    <description>[CRITIQUE] Indicateurs multiples et correles de compromission de compte - reponse automatique engagee</description>
+    <mitre>
+      <id>TA0040</id>
+    </mitre>
+    <group>incident,soar_trigger,</group>
+  </rule>
+
+  <!-- ============================================================
+       6. INTEGRITE DES SYSTEMES DE MARCHE (disponibilite - horaires Bourse)
+       ============================================================ -->
+
+  <rule id="100640" level="9">
+    <if_group>windows|linux|sshd</if_group>
+    <status>failed|stopped|down</status>
+    <field name="service">trading|market-data|order-management</field>
+    <description>Arret ou echec d'un service critique lie aux operations de marche</description>
+    <mitre>
+      <id>T1489</id>
+    </mitre>
+    <group>availability,business_critical,</group>
+  </rule>
+
+</group>

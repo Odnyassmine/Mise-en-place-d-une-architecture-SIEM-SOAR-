@@ -1,0 +1,30 @@
+name: "PB-01 - Bruteforce plateforme de trading / back-office"
+description: >
+  Reaction a des tentatives repetees d'acces non autorise a la
+  plateforme de trading ou au back-office (regle Wazuh 100601).
+trigger_rule_ids:
+  - 100601
+
+steps:
+  - action: enrich
+    analyzer: AbuseIPDB_1_0
+    description: "Verification de la reputation de l'IP source"
+
+  - action: create_case
+    title_template: "[Bruteforce] {rule_description}"
+    severity: 3
+    tags: ["bruteforce", "trading-platform", "T1110"]
+
+  - action: respond
+    description: >
+      Blocage automatique de l'IP source deja applique par Wazuh
+      active-response (firewall-drop, 15 min) - confirmation journalisee.
+
+  - action: notify
+    subject: "[SOC] Bruteforce detecte sur plateforme de trading"
+    message: >
+      Plusieurs tentatives d'authentification echouees ont ete
+      detectees sur la plateforme de trading/back-office. L'IP source
+      a ete bloquee automatiquement pendant 15 minutes. Un cas TheHive
+      a ete cree pour investigation.
+    severity_label: high
